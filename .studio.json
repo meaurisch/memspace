@@ -1,0 +1,6 @@
+{
+    "prompts":  [
+                    "python-script.md"
+                ],
+    "agentMode":  false
+}

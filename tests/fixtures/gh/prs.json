@@ -1,0 +1,30 @@
+[
+  {
+    "number": 1,
+    "title": "Bump pytest from 8.0 to 8.1",
+    "body": "Bumps pytest.",
+    "state": "MERGED",
+    "mergedAt": "2026-01-10T11:00:00Z",
+    "createdAt": "2026-01-09T11:00:00Z",
+    "url": "https://github.com/example/todo-api/pull/1",
+    "author": {"login": "app/dependabot"},
+    "comments": [],
+    "reviews": []
+  },
+  {
+    "number": 14,
+    "title": "Cache the feed fetch for 15 minutes",
+    "body": "Re-fetching every run wastes the rate limit. Cache in a temp file keyed by URL.",
+    "state": "MERGED",
+    "mergedAt": "2026-03-02T14:30:00Z",
+    "createdAt": "2026-03-01T09:00:00Z",
+    "url": "https://github.com/example/todo-api/pull/14",
+    "author": {"login": "octocat"},
+    "comments": [
+      {"author": {"login": "octocat"}, "createdAt": "2026-03-01T18:20:00Z", "body": "Key it by URL, not by feed name."}
+    ],
+    "reviews": [
+      {"author": {"login": "octocat"}, "state": "APPROVED", "body": "Good, but drop the module-level global."}
+    ]
+  }
+]

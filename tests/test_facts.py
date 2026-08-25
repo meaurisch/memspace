@@ -1,0 +1,76 @@
+from pathlib import Path
+import pytest
+from memspace.facts import Fact, FactError, parse_fact, dump_fact
+
+GOOD = """---
+id: dec-0001-sqlite
+type: decision
+scope: alpha/proj-x
+title: Use SQLite
+summary: SQLite over Postgres because single-user
+status: active
+confidence: high
+weight: 70
+sources:
+  - https://github.com/x/y/issues/1
+created: 2026-08-01
+updated: 2026-08-02
+supersedes: []
+superseded_by: null
+author: morris
+tags: [db]
+---
+Body text.
+"""
+
+
+def write(tmp_path, name, text):
+    p = tmp_path / name
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def test_parse_good(tmp_path):
+    f = parse_fact(write(tmp_path, "dec-0001-sqlite.md", GOOD))
+    assert f.id == "dec-0001-sqlite"
+    assert f.type == "decision"
+    assert f.scope == "alpha/proj-x"
+    assert f.sources == ["https://github.com/x/y/issues/1"]
+    assert f.weight == 70
+    assert f.body == "Body text."
+    assert f.path.name == "dec-0001-sqlite.md"
+
+
+def test_id_must_match_filename(tmp_path):
+    with pytest.raises(FactError, match="filename"):
+        parse_fact(write(tmp_path, "dec-0009-other.md", GOOD))
+
+
+def test_missing_sources_is_error(tmp_path):
+    bad = GOOD.replace("sources:\n  - https://github.com/x/y/issues/1\n", "sources: []\n")
+    with pytest.raises(FactError, match="sources"):
+        parse_fact(write(tmp_path, "dec-0001-sqlite.md", bad))
+
+
+def test_bad_source_format(tmp_path):
+    bad = GOOD.replace("https://github.com/x/y/issues/1", "just a note")
+    with pytest.raises(FactError, match="source"):
+        parse_fact(write(tmp_path, "dec-0001-sqlite.md", bad))
+
+
+def test_prefix_must_match_type(tmp_path):
+    bad = GOOD.replace("type: decision", "type: preference")
+    with pytest.raises(FactError, match="prefix"):
+        parse_fact(write(tmp_path, "dec-0001-sqlite.md", bad))
+
+
+def test_superseded_requires_superseded_by(tmp_path):
+    bad = GOOD.replace("status: active", "status: superseded")
+    with pytest.raises(FactError, match="superseded_by"):
+        parse_fact(write(tmp_path, "dec-0001-sqlite.md", bad))
+
+
+def test_roundtrip(tmp_path):
+    f = parse_fact(write(tmp_path, "dec-0001-sqlite.md", GOOD))
+    again = parse_fact(write(tmp_path, "dec-0001-sqlite.md", dump_fact(f)))
+    assert again == f
