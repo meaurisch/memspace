@@ -1,0 +1,30 @@
+[
+  {
+    "number": 9,
+    "title": "Fix config loader tests",
+    "body": "The config loader tests fail whenever the machine timezone is not UTC.\nWe should freeze the clock in the fixture instead of reading the system date.",
+    "state": "CLOSED",
+    "labels": [{"name": "bug"}],
+    "createdAt": "2026-02-01T09:12:00Z",
+    "closedAt": "2026-02-03T16:40:00Z",
+    "url": "https://github.com/example/todo-api/issues/9",
+    "comments": [
+      {
+        "author": {"login": "octocat"},
+        "createdAt": "2026-02-02T10:04:00Z",
+        "body": "Rejected: we freeze the clock in tests, we do not skip them"
+      }
+    ]
+  },
+  {
+    "number": 13,
+    "title": "Add a --dry-run flag to the publish step",
+    "body": "Publishing is irreversible; a dry run would let us eyeball the output first.",
+    "state": "OPEN",
+    "labels": [],
+    "createdAt": "2026-05-14T08:00:00Z",
+    "closedAt": null,
+    "url": "https://github.com/example/todo-api/issues/13",
+    "comments": []
+  }
+]

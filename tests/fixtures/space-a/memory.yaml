@@ -1,0 +1,5 @@
+spaces:
+  alpha:
+    root: spaces/alpha
+    remote: local
+    policy: {storage: local, embeddings: local, llm: hosted:openrouter}
