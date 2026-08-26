@@ -121,7 +121,15 @@ def parse_fact(path: Path) -> Fact:
             raise FactError(f"{path}: {k} must be a list")
     for k in _TEXT_FIELDS:
         v = meta.get(k)
-        extra[k] = None if v is None else str(v).strip()
+        if v is None:
+            extra[k] = None
+        elif isinstance(v, bool):
+            # YAML reads an unquoted `false`/`true` check as a bool; str() would
+            # capitalize it into an invalid shell command ("False"), so normalize
+            # to the shell spelling instead.
+            extra[k] = "true" if v else "false"
+        else:
+            extra[k] = str(v).strip()
     if extra["enforce"] is not None and extra["enforce"] not in VALID_ENFORCE:
         raise FactError(f"{path}: enforce {extra['enforce']!r} not in {sorted(VALID_ENFORCE)}")
     return Fact(
