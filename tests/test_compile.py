@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, shutil, subprocess
+import json, os, shutil, subprocess
 from pathlib import Path
 
 import pytest
@@ -48,8 +48,12 @@ def _gate_hook(space_b, tmp_path, check: str) -> Path:
     return tmp_path / "repo/.claude/hooks/proc-0009-gate.sh"
 
 
-def _run(hook: Path):
-    return subprocess.run([BASH, str(hook)], capture_output=True, text=True, cwd=str(hook.parent))
+def _run(hook: Path, project_dir: Path | None = None):
+    env = dict(os.environ)
+    if project_dir is not None:
+        env["CLAUDE_PROJECT_DIR"] = str(project_dir)
+    return subprocess.run([BASH, str(hook)], capture_output=True, text=True,
+                           cwd=str(hook.parent), env=env)
 
 
 def test_enforced_fact_gets_a_stop_hook(space_b, tmp_path):
@@ -135,6 +139,46 @@ def test_hook_never_blocks_when_the_check_itself_is_broken(space_b, tmp_path):
     for check in ("memspace-no-such-command-9x", "/etc", '"$(exit 127)"', '"if then fi"'):
         r = _run(_gate_hook(space_b, tmp_path, check))
         assert r.returncode == 0, f"{check!r} bricked the session: {r.stderr}"
+
+
+@needs_bash
+def test_hook_logs_a_fire_line_when_the_check_passes(space_b, tmp_path):
+    hook = _gate_hook(space_b, tmp_path, "true")
+    project = tmp_path / "project"
+    project.mkdir()
+    r = _run(hook, project_dir=project)
+    assert r.returncode == 0
+    lines = (project / ".memspace/fire.log").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert lines[0].startswith("FIRE ")
+    assert lines[0].endswith("proc-0009-gate stop")
+
+
+@needs_bash
+def test_hook_logs_fire_and_block_lines_when_the_check_fails(space_b, tmp_path):
+    hook = _gate_hook(space_b, tmp_path, "false")
+    project = tmp_path / "project"
+    project.mkdir()
+    r = _run(hook, project_dir=project)
+    assert r.returncode == 2
+    lines = (project / ".memspace/fire.log").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("FIRE ") and lines[0].endswith("proc-0009-gate stop")
+    assert lines[1].startswith("BLOCK ")
+    assert "proc-0009-gate" in lines[1]
+    assert "the thing was left undone" in lines[1]
+
+
+@needs_bash
+def test_hook_logging_never_changes_the_exit_code_when_the_log_location_is_unusable(space_b, tmp_path):
+    hook = _gate_hook(space_b, tmp_path, "false")
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".memspace").write_text("not a directory", encoding="utf-8")  # mkdir -p will fail
+    r = _run(hook, project_dir=project)
+    assert r.returncode == 2
+    assert "the thing was left undone" in r.stderr
+    assert "proc-0009-gate" in r.stderr
 
 
 def test_cli_compile(space_b, tmp_path, capsys):
