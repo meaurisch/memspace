@@ -31,6 +31,8 @@ def build_parser():
     s = sub.add_parser("export-context"); s.add_argument("scope"); s.add_argument("--budget-tokens", type=int, default=3000)
     s = sub.add_parser("recall"); s.add_argument("scope"); s.add_argument("query"); s.add_argument("-k", type=int, default=8)
     s.add_argument("--type", action="append", dest="types"); s.add_argument("--include-superseded", action="store_true")
+    s.add_argument("--validate", action="store_true",
+                    help="drop hits whose path/path:line sources no longer resolve; URL sources are never checked")
     s = sub.add_parser("remember")
     for a in ("--scope", "--type", "--title", "--summary"):
         s.add_argument(a, required=True)
@@ -60,7 +62,7 @@ def main(argv=None) -> int:
     try:
         if args.cmd == "lint":
             today = dt.date.fromisoformat(args.today) if args.today else None
-            findings = lint_space(_space(root, args.space), today=today)
+            findings = lint_space(_space(root, args.space), today=today, repo_root=root.path)
             for f in findings:
                 print(f"{f.level}: {f.message}")
             print(f"{sum(f.level=='error' for f in findings)} error(s), {sum(f.level=='warn' for f in findings)} warning(s)")
@@ -79,7 +81,8 @@ def main(argv=None) -> int:
             print(export_context(_space_of_scope(root, args.scope), args.scope, args.budget_tokens), end=""); return 0
         if args.cmd == "recall":
             for f in recall(_space_of_scope(root, args.scope), args.scope, args.query, k=args.k,
-                            types=args.types, include_superseded=args.include_superseded):
+                            types=args.types, include_superseded=args.include_superseded,
+                            validate=args.validate, repo_root=root.path):
                 print(f"{f.id} · {f.type} · {f.status} · {f.title} — {f.summary} · {f.path}")
             return 0
         if args.cmd == "remember":

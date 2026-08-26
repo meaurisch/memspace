@@ -1,7 +1,8 @@
 from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
-from .facts import Fact, FactError, parse_fact
+from pathlib import Path
+from .facts import Fact, FactError, parse_fact, dead_sources
 from .space import Space
 from .index import stale_indexes, index_line_counts
 
@@ -40,7 +41,7 @@ def _load_all(space: Space, out: list[Finding]) -> list[tuple[Fact, str, bool]]:
     return loaded
 
 
-def lint_space(space: Space, today: dt.date | None = None) -> list[Finding]:
+def lint_space(space: Space, today: dt.date | None = None, repo_root: Path | None = None) -> list[Finding]:
     today = today or dt.date.today()
     out: list[Finding] = []
     loaded = _load_all(space, out)
@@ -62,6 +63,9 @@ def lint_space(space: Space, today: dt.date | None = None) -> list[Finding]:
             out.append(Finding("error", fact.id, f"{fact.id}: {NOT_ACTIONABLE}"))
         if fact.status == "disputed" and (today - fact.updated).days > DISPUTED_TTL_DAYS:
             out.append(Finding("warn", fact.id, f"{fact.id}: disputed for >{DISPUTED_TTL_DAYS} days — resolve it"))
+        if repo_root is not None:
+            for s in dead_sources(fact, repo_root):
+                out.append(Finding("warn", fact.id, f"{fact.id}: source {s!r} does not resolve under {repo_root}"))
     for fact in seen.values():
         for sid in fact.supersedes:
             if sid not in seen:

@@ -135,6 +135,42 @@ def parse_fact(path: Path) -> Fact:
     )
 
 
+_PATH_LINE_RE = re.compile(r"^(?P<path>[\w./-]+\.\w+):(?P<line>\d+)$")
+
+
+def is_checkable_source(s: str) -> bool:
+    """True for sources this tool can verify locally: a repo-relative path, optionally
+    with a :line suffix. URL and git:<sha> sources are left alone — never fetched,
+    never invalidated."""
+    return not (s.startswith("http://") or s.startswith("https://") or s.startswith("git:"))
+
+
+def dead_source(repo_root: Path, source: str) -> bool:
+    """True if a checkable source no longer resolves against repo_root: the file is
+    missing, or (for a path:line citation) the line number is out of range."""
+    if not is_checkable_source(source):
+        return False
+    m = _PATH_LINE_RE.match(source)
+    rel = m.group("path") if m else source
+    p = repo_root / rel
+    if not p.is_file():
+        return True
+    if not m:
+        return False
+    line = int(m.group("line"))
+    if line < 1:
+        return True
+    try:
+        n = sum(1 for _ in p.open(encoding="utf-8"))
+    except UnicodeDecodeError:
+        return False  # not a text file we can count lines in; existence is enough
+    return line > n
+
+
+def dead_sources(fact: Fact, repo_root: Path) -> list[str]:
+    return [s for s in fact.sources if dead_source(repo_root, s)]
+
+
 def dump_fact(fact: Fact) -> str:
     meta = {k: getattr(fact, k) for k in _ORDER}
     meta["created"] = fact.created.isoformat()

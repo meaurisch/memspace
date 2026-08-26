@@ -96,6 +96,48 @@ def test_strict_admission_ignores_other_types_and_inactive_facts(space_a):
         assert not any(other in m for m in errs)
 
 
+def test_dead_path_citation_warns_not_errors(space_a):
+    p = space_a / "spaces/alpha/proj-x/facts/dec-0001-sqlite.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "sources:\n  - https://example.com/1", "sources:\n  - https://example.com/1\n  - does-not-exist.txt"),
+        encoding="utf-8")
+    sp = load_root().spaces["alpha"]
+    write_indexes(sp)
+    fs = lint_space(sp, today=TODAY, repo_root=space_a)
+    assert not has_errors(fs)
+    assert any("dec-0001-sqlite" in m and "does-not-exist.txt" in m for m in msgs(fs, "warn"))
+
+
+def test_resolvable_path_citation_no_warning(space_a):
+    (space_a / "README.md").write_text("hi\n", encoding="utf-8")
+    p = space_a / "spaces/alpha/proj-x/facts/dec-0001-sqlite.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "sources:\n  - https://example.com/1", "sources:\n  - https://example.com/1\n  - README.md"),
+        encoding="utf-8")
+    sp = load_root().spaces["alpha"]
+    write_indexes(sp)
+    fs = lint_space(sp, today=TODAY, repo_root=space_a)
+    assert not any("README.md" in m for m in msgs(fs, "warn"))
+
+
+def test_url_sources_never_checked_by_lint(space_a):
+    sp = load_root().spaces["alpha"]
+    write_indexes(sp)
+    fs = lint_space(sp, today=TODAY, repo_root=space_a)
+    assert not any("example.com" in m for m in msgs(fs, "warn"))
+
+
+def test_no_repo_root_skips_citation_check(space_a):
+    p = space_a / "spaces/alpha/proj-x/facts/dec-0001-sqlite.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "sources:\n  - https://example.com/1", "sources:\n  - https://example.com/1\n  - does-not-exist.txt"),
+        encoding="utf-8")
+    sp = load_root().spaces["alpha"]
+    write_indexes(sp)
+    fs = lint_space(sp, today=TODAY)
+    assert not any("does-not-exist.txt" in m for m in msgs(fs, "warn"))
+
+
 def test_proposed_file_with_wrong_status_warns(space_a):
     p = space_a / "spaces/alpha/proj-x/proposed"
     p.mkdir()

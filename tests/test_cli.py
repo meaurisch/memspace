@@ -34,6 +34,28 @@ def test_remember_and_supersede(space_a, capsys):
     assert main(["lint", "--today", "2026-08-23"]) == 0
 
 
+def test_recall_validate_flag_drops_dead_citation(space_a, capsys):
+    main(["index"])
+    p = space_a / "spaces/alpha/proj-x/facts/dec-0001-sqlite.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "sources:\n  - https://example.com/1", "sources:\n  - https://example.com/1\n  - does-not-exist.txt"),
+        encoding="utf-8")
+    assert main(["recall", "alpha/proj-x", "sqlite", "-k", "3"]) == 0
+    assert "dec-0001-sqlite" in capsys.readouterr().out
+    assert main(["recall", "alpha/proj-x", "sqlite", "-k", "3", "--validate"]) == 0
+    assert "dec-0001-sqlite" not in capsys.readouterr().out
+
+
+def test_lint_warns_on_dead_citation(space_a, capsys):
+    p = space_a / "spaces/alpha/proj-x/facts/dec-0001-sqlite.md"
+    p.write_text(p.read_text(encoding="utf-8").replace(
+        "sources:\n  - https://example.com/1", "sources:\n  - https://example.com/1\n  - does-not-exist.txt"),
+        encoding="utf-8")
+    write_indexes(load_root().spaces["alpha"])
+    assert main(["lint", "--today", "2026-08-23"]) == 0
+    assert "does-not-exist.txt" in capsys.readouterr().out
+
+
 def test_no_root(tmp_path, monkeypatch):
     monkeypatch.delenv("MEMSPACE_ROOT", raising=False)
     monkeypatch.chdir(tmp_path)
