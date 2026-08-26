@@ -8,6 +8,8 @@ from .export import export_context
 from .recall import recall
 from .write import remember, supersede
 from .seed import seed_brief
+from .compile import TARGETS, compile_space
+from .harvest import harvest
 
 
 def _space(root, name):
@@ -30,6 +32,8 @@ def build_parser():
     s = sub.add_parser("export-context"); s.add_argument("scope"); s.add_argument("--budget-tokens", type=int, default=3000)
     s = sub.add_parser("recall"); s.add_argument("scope"); s.add_argument("query"); s.add_argument("-k", type=int, default=8)
     s.add_argument("--type", action="append", dest="types"); s.add_argument("--include-superseded", action="store_true")
+    s.add_argument("--validate", action="store_true",
+                    help="drop hits whose path/path:line sources no longer resolve; URL sources are never checked")
     s = sub.add_parser("remember")
     for a in ("--scope", "--type", "--title", "--summary"):
         s.add_argument(a, required=True)
@@ -38,6 +42,12 @@ def build_parser():
     s.add_argument("--tag", action="append", default=[], dest="tags"); s.add_argument("--direct", action="store_true")
     s = sub.add_parser("supersede"); s.add_argument("old_id"); s.add_argument("--with", dest="new_id", required=True)
     s = sub.add_parser("seed-brief"); s.add_argument("repo"); s.add_argument("--since"); s.add_argument("-o", dest="out")
+    s = sub.add_parser("compile"); s.add_argument("space", nargs="?")
+    s.add_argument("--target", choices=sorted(TARGETS), default="claude"); s.add_argument("--out", default=".")
+    s = sub.add_parser("harvest"); s.add_argument("space", nargs="?")
+    s.add_argument("--repo", required=True, metavar="owner/name")
+    s.add_argument("--since", required=True, metavar="YYYY-MM-DD",
+                   help="only pull requests merged on or after this date")
     return p
 
 
@@ -57,7 +67,7 @@ def main(argv=None) -> int:
     try:
         if args.cmd == "lint":
             today = dt.date.fromisoformat(args.today) if args.today else None
-            findings = lint_space(_space(root, args.space), today=today)
+            findings = lint_space(_space(root, args.space), today=today, repo_root=root.path)
             for f in findings:
                 print(f"{f.level}: {f.message}")
             print(f"{sum(f.level=='error' for f in findings)} error(s), {sum(f.level=='warn' for f in findings)} warning(s)")
@@ -76,7 +86,8 @@ def main(argv=None) -> int:
             print(export_context(_space_of_scope(root, args.scope), args.scope, args.budget_tokens), end=""); return 0
         if args.cmd == "recall":
             for f in recall(_space_of_scope(root, args.scope), args.scope, args.query, k=args.k,
-                            types=args.types, include_superseded=args.include_superseded):
+                            types=args.types, include_superseded=args.include_superseded,
+                            validate=args.validate, repo_root=root.path):
                 print(f"{f.id} · {f.type} · {f.status} · {f.title} — {f.summary} · {f.path}")
             return 0
         if args.cmd == "remember":
@@ -84,6 +95,14 @@ def main(argv=None) -> int:
             p = remember(_space_of_scope(root, args.scope), args.scope, args.type, args.title, args.summary,
                          args.sources, body=body, author=args.author, tags=args.tags, direct=args.direct)
             print(p.as_posix()); return 0
+        if args.cmd == "compile":
+            for p in compile_space(_space(root, args.space), Path(args.out), target=args.target):
+                print(p.as_posix())
+            return 0
+        if args.cmd == "harvest":
+            for p in harvest(_space(root, args.space), args.repo, args.since):
+                print(p.as_posix())
+            return 0
         if args.cmd == "supersede":
             supersede(_space(root, None), args.old_id, args.new_id)   # ids are space-wide unique; default space
             return 0

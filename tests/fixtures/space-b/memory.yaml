@@ -1,0 +1,5 @@
+spaces:
+  beta:
+    root: spaces/beta
+    remote: local
+    policy: {storage: local, embeddings: local, llm: local}

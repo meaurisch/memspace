@@ -89,6 +89,8 @@ taken from `$MEMSPACE_ROOT`.
 | `memspace remember --scope S --type T --title X --summary Y --source URL… [--body-file F] [--direct]` | Writes a schema-valid fact to `proposed/`, or straight to `facts/` with `--direct`. |
 | `memspace supersede <old-id> --with <new-id>` | Flips both sides of the link symmetrically and re-indexes. |
 | `memspace seed-brief <owner/repo> [--since DATE] [-o FILE]` | Turns a repo's issues and pull requests into one markdown brief for an agent to distil into facts. Shells out to `gh`; no LLM. |
+| `memspace compile <space> --target claude --out DIR` | Turns actionable facts into Claude Code hooks and rules under `DIR/.claude/`. Deterministic and idempotent. |
+| `memspace harvest <space> --repo <owner/name> --since DATE` | Reads review comments on pull requests merged since DATE and writes candidate facts to `proposed/`. Shells out to `gh`; no LLM. |
 
 ## A space
 
@@ -148,6 +150,71 @@ sides, no index is stale or over 60 lines. It warns — never deletes — on `ep
 untouched for 90 days and `disputed` facts left unresolved for a week. There is no
 time-based expiry: a human reads the lint report and decides.
 
+## Facts that do something — `compile`
+
+A fact an agent reads is a suggestion. Some conventions want teeth, so a fact may say what
+to do, where it applies, and how to tell whether it was followed. All six fields are
+optional:
+
+```yaml
+triggers: [changelog, release]         # keywords that should bring this fact to mind
+paths: ["src/**"]                      # globs this fact governs
+action_hint: add one line under "Unreleased" in CHANGELOG.md before you finish
+failure_if_ignored: the release notes miss the change and users find it by breaking
+check: "! git diff --quiet -- CHANGELOG.md"    # nonzero exit == convention violated
+enforce: stop                          # block the agent from ending its turn
+```
+
+`memspace compile` turns those fields — and only those fields, never a fact body — into
+files the agent already obeys:
+
+```bash
+memspace compile demo --target claude --out .
+```
+
+```
+.claude/settings.json                       Stop-hook entries, merged into what is already there
+.claude/hooks/proc-0001-changelog-entry.sh  one script per fact with enforce: stop and a check
+.claude/rules/proc-0001-changelog-entry.md  one rule per fact with paths:, globs in frontmatter
+```
+
+A hook runs its `check` when the agent tries to end its turn. Check passes, the turn ends.
+Check fails, the hook exits 2 and hands `failure_if_ignored`, the fact id and its summary
+back to the agent as the reason it may not stop yet.
+
+**A broken fact must never brick a session.** The generated script only blocks when the
+check actually ran and said no. A check that does not parse, names a command that is not
+installed, or points at something it cannot execute exits 0 and lets the turn end. Only
+`active` facts compile — superseded and disputed ones are ignored however loud their
+frontmatter is.
+
+Output is deterministic and idempotent: facts compile in id order, JSON keys are sorted,
+and recompiling an unchanged space rewrites byte-identical files, so the result is
+reviewable in a diff or regenerable in CI. `settings.json` is merged, not replaced — your
+other settings and other hook events survive.
+
+## Mining review comments — `harvest`
+
+Code review is where conventions get said out loud, and then scroll away. `harvest` reads
+the review comments on pull requests merged since a date and writes each one it thinks
+carries a rule into `proposed/`:
+
+```bash
+memspace harvest demo --repo example-org/example-repo --since 2026-02-01
+# spaces/demo/proposed/fact-0007-key-the-cache-by-url.md
+```
+
+Each candidate keeps the comment text as its body, its first sentence as the summary, and
+both the comment permalink and the pull request URL as `sources` — so a reviewer can open
+the thread the claim came from. The filters are deliberately blunt: bot accounts, quoted
+lines, comments under 40 characters and one-word verdicts (`LGTM`, `nit`, `done`) are
+dropped, and a candidate whose summary already matches a fact in `facts/` or `proposed/`
+is skipped, so re-running on a wider date range adds only what is new.
+
+**`harvest` cannot write to `facts/`.** There is no `--direct` here. Candidates arrive
+unedited, unranked and often wrong; they become memory when a human rewrites one into a
+fact and merges it. Treat the output as a reading list, not as a draft space.
+
 ## Working on it
 
 ```bash
@@ -161,7 +228,7 @@ the tool's real output.
 
 ## Current state
 
-v0.1 — the seven commands above, 46 tests, CI on Python 3.11, 3.12 and 3.13. In real use by
+v0.1 — the nine commands above, 89 tests, CI on Python 3.11, 3.12 and 3.13. In real use by
 one private system; not on PyPI, and the API is not frozen. The premise the whole thing rests
 on — that injecting this into an agent's context measurably helps — is still being measured.
 Treat it as a well-tested tool built on an untested idea.

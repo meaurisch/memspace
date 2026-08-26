@@ -1,6 +1,7 @@
 from __future__ import annotations
 import re, sqlite3
-from .facts import Fact
+from pathlib import Path
+from .facts import Fact, dead_sources
 from .space import Space
 
 
@@ -10,7 +11,8 @@ def _fts_query(q: str) -> str:
 
 
 def recall(space: Space, scope: str, query: str, k: int = 8,
-           types: list[str] | None = None, include_superseded: bool = False) -> list[Fact]:
+           types: list[str] | None = None, include_superseded: bool = False,
+           validate: bool = False, repo_root: Path | None = None) -> list[Fact]:
     cands = [f for f in space.facts() if f.scope in (scope, space.id)]
     if not include_superseded:
         cands = [f for f in cands if f.status != "superseded"]
@@ -26,4 +28,7 @@ def recall(space: Space, scope: str, query: str, k: int = 8,
         "SELECT id FROM f WHERE f MATCH ? ORDER BY bm25(f, 5.0, 5.0, 3.0, 1.0, 1.0) LIMIT ?",
         (_fts_query(query), k)).fetchall()
     by_id = {f.id: f for f in cands}
-    return [by_id[r[0]] for r in rows]
+    hits = [by_id[r[0]] for r in rows]
+    if validate and repo_root is not None:
+        hits = [f for f in hits if not dead_sources(f, repo_root)]
+    return hits

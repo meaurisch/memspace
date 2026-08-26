@@ -74,3 +74,55 @@ def test_roundtrip(tmp_path):
     f = parse_fact(write(tmp_path, "dec-0001-sqlite.md", GOOD))
     again = parse_fact(write(tmp_path, "dec-0001-sqlite.md", dump_fact(f)))
     assert again == f
+
+
+ACTIONABLE = GOOD.replace("tags: [db]\n", """tags: [db]
+triggers: [migration, schema]
+paths:
+  - "db/**/*.py"
+action_hint: reach for SQLite before adding a database service
+failure_if_ignored: agent stands up Postgres nobody runs
+check: python -c "import sqlite3"
+enforce: stop
+""")
+
+
+def test_parse_actionable_fields(tmp_path):
+    f = parse_fact(write(tmp_path, "dec-0001-sqlite.md", ACTIONABLE))
+    assert f.triggers == ["migration", "schema"]
+    assert f.paths == ["db/**/*.py"]
+    assert f.action_hint == "reach for SQLite before adding a database service"
+    assert f.failure_if_ignored == "agent stands up Postgres nobody runs"
+    assert f.check == 'python -c "import sqlite3"'
+    assert f.enforce == "stop"
+
+
+def test_actionable_fields_default_empty(tmp_path):
+    f = parse_fact(write(tmp_path, "dec-0001-sqlite.md", GOOD))
+    assert f.triggers == [] and f.paths == []
+    assert f.action_hint is None and f.failure_if_ignored is None
+    assert f.check is None and f.enforce is None
+
+
+def test_actionable_fields_roundtrip(tmp_path):
+    f = parse_fact(write(tmp_path, "dec-0001-sqlite.md", ACTIONABLE))
+    again = parse_fact(write(tmp_path, "dec-0001-sqlite.md", dump_fact(f)))
+    assert again == f
+
+
+def test_dump_omits_unset_actionable_fields(tmp_path):
+    text = dump_fact(parse_fact(write(tmp_path, "dec-0001-sqlite.md", GOOD)))
+    for key in ("triggers:", "paths:", "action_hint:", "failure_if_ignored:", "check:", "enforce:"):
+        assert key not in text
+
+
+def test_enforce_value_is_checked(tmp_path):
+    bad = ACTIONABLE.replace("enforce: stop", "enforce: warn")
+    with pytest.raises(FactError, match="enforce"):
+        parse_fact(write(tmp_path, "dec-0001-sqlite.md", bad))
+
+
+def test_triggers_must_be_a_list(tmp_path):
+    bad = ACTIONABLE.replace("triggers: [migration, schema]", "triggers: migration")
+    with pytest.raises(FactError, match="triggers"):
+        parse_fact(write(tmp_path, "dec-0001-sqlite.md", bad))

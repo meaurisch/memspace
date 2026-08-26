@@ -8,6 +8,13 @@ def test_load_root_from_env(space_a):
     assert root.path == space_a
     assert list(root.spaces) == ["alpha"]
     assert root.spaces["alpha"].policy["embeddings"] == "local"
+    assert root.spaces["alpha"].admission == "lax"
+
+
+def test_admission_read_from_memory_yaml(space_a):
+    p = space_a / "memory.yaml"
+    p.write_text(p.read_text(encoding="utf-8").replace("    remote: local", "    remote: local\n    admission: strict"), encoding="utf-8")
+    assert load_root().spaces["alpha"].admission == "strict"
 
 
 def test_load_root_walks_up(space_a, monkeypatch):
