@@ -8,6 +8,7 @@ from .export import export_context
 from .recall import recall
 from .write import remember, supersede
 from .seed import seed_brief
+from .compile import TARGETS, compile_space
 
 
 def _space(root, name):
@@ -38,6 +39,8 @@ def build_parser():
     s.add_argument("--tag", action="append", default=[], dest="tags"); s.add_argument("--direct", action="store_true")
     s = sub.add_parser("supersede"); s.add_argument("old_id"); s.add_argument("--with", dest="new_id", required=True)
     s = sub.add_parser("seed-brief"); s.add_argument("repo"); s.add_argument("--since"); s.add_argument("-o", dest="out")
+    s = sub.add_parser("compile"); s.add_argument("space", nargs="?")
+    s.add_argument("--target", choices=sorted(TARGETS), default="claude"); s.add_argument("--out", default=".")
     return p
 
 
@@ -84,6 +87,10 @@ def main(argv=None) -> int:
             p = remember(_space_of_scope(root, args.scope), args.scope, args.type, args.title, args.summary,
                          args.sources, body=body, author=args.author, tags=args.tags, direct=args.direct)
             print(p.as_posix()); return 0
+        if args.cmd == "compile":
+            for p in compile_space(_space(root, args.space), Path(args.out), target=args.target):
+                print(p.as_posix())
+            return 0
         if args.cmd == "supersede":
             supersede(_space(root, None), args.old_id, args.new_id)   # ids are space-wide unique; default space
             return 0
