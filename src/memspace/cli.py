@@ -9,6 +9,7 @@ from .recall import recall
 from .write import remember, supersede
 from .seed import seed_brief
 from .compile import TARGETS, compile_space
+from .harvest import harvest
 
 
 def _space(root, name):
@@ -43,6 +44,10 @@ def build_parser():
     s = sub.add_parser("seed-brief"); s.add_argument("repo"); s.add_argument("--since"); s.add_argument("-o", dest="out")
     s = sub.add_parser("compile"); s.add_argument("space", nargs="?")
     s.add_argument("--target", choices=sorted(TARGETS), default="claude"); s.add_argument("--out", default=".")
+    s = sub.add_parser("harvest"); s.add_argument("space", nargs="?")
+    s.add_argument("--repo", required=True, metavar="owner/name")
+    s.add_argument("--since", required=True, metavar="YYYY-MM-DD",
+                   help="only pull requests merged on or after this date")
     return p
 
 
@@ -92,6 +97,10 @@ def main(argv=None) -> int:
             print(p.as_posix()); return 0
         if args.cmd == "compile":
             for p in compile_space(_space(root, args.space), Path(args.out), target=args.target):
+                print(p.as_posix())
+            return 0
+        if args.cmd == "harvest":
+            for p in harvest(_space(root, args.space), args.repo, args.since):
                 print(p.as_posix())
             return 0
         if args.cmd == "supersede":

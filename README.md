@@ -90,6 +90,7 @@ taken from `$MEMSPACE_ROOT`.
 | `memspace supersede <old-id> --with <new-id>` | Flips both sides of the link symmetrically and re-indexes. |
 | `memspace seed-brief <owner/repo> [--since DATE] [-o FILE]` | Turns a repo's issues and pull requests into one markdown brief for an agent to distil into facts. Shells out to `gh`; no LLM. |
 | `memspace compile <space> --target claude --out DIR` | Turns actionable facts into Claude Code hooks and rules under `DIR/.claude/`. Deterministic and idempotent. |
+| `memspace harvest <space> --repo <owner/name> --since DATE` | Reads review comments on pull requests merged since DATE and writes candidate facts to `proposed/`. Shells out to `gh`; no LLM. |
 
 ## A space
 
@@ -192,6 +193,28 @@ and recompiling an unchanged space rewrites byte-identical files, so the result 
 reviewable in a diff or regenerable in CI. `settings.json` is merged, not replaced — your
 other settings and other hook events survive.
 
+## Mining review comments — `harvest`
+
+Code review is where conventions get said out loud, and then scroll away. `harvest` reads
+the review comments on pull requests merged since a date and writes each one it thinks
+carries a rule into `proposed/`:
+
+```bash
+memspace harvest demo --repo example-org/example-repo --since 2026-02-01
+# spaces/demo/proposed/fact-0007-key-the-cache-by-url.md
+```
+
+Each candidate keeps the comment text as its body, its first sentence as the summary, and
+both the comment permalink and the pull request URL as `sources` — so a reviewer can open
+the thread the claim came from. The filters are deliberately blunt: bot accounts, quoted
+lines, comments under 40 characters and one-word verdicts (`LGTM`, `nit`, `done`) are
+dropped, and a candidate whose summary already matches a fact in `facts/` or `proposed/`
+is skipped, so re-running on a wider date range adds only what is new.
+
+**`harvest` cannot write to `facts/`.** There is no `--direct` here. Candidates arrive
+unedited, unranked and often wrong; they become memory when a human rewrites one into a
+fact and merges it. Treat the output as a reading list, not as a draft space.
+
 ## Working on it
 
 ```bash
@@ -205,7 +228,7 @@ the tool's real output.
 
 ## Current state
 
-v0.1 — the eight commands above, 69 tests, CI on Python 3.11, 3.12 and 3.13. In real use by
+v0.1 — the nine commands above, 89 tests, CI on Python 3.11, 3.12 and 3.13. In real use by
 one private system; not on PyPI, and the API is not frozen. The premise the whole thing rests
 on — that injecting this into an agent's context measurably helps — is still being measured.
 Treat it as a well-tested tool built on an untested idea.
