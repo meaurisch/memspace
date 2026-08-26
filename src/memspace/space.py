@@ -6,6 +6,9 @@ import yaml
 from .facts import Fact, parse_fact
 
 
+VALID_ADMISSION = {"lax", "strict"}
+
+
 class SpaceError(Exception):
     pass
 
@@ -16,6 +19,7 @@ class Space:
     root: Path
     remote: str = "local"
     policy: dict = field(default_factory=dict)
+    admission: str = "lax"  # "strict" also demands that facts say what an agent should do
 
     def scope_dir(self, scope: str) -> Path:
         parts = scope.split("/")
@@ -69,10 +73,15 @@ def load_root(start: Path | None = None) -> Root:
         if base is None:
             raise SpaceError("no memory.yaml found walking up from " + str(cur))
     data = yaml.safe_load((base / "memory.yaml").read_text(encoding="utf-8")) or {}
+    default_admission = str(data.get("admission", "lax"))
     spaces = {}
     for sid, cfg in (data.get("spaces") or {}).items():
+        admission = str(cfg.get("admission", default_admission))
+        if admission not in VALID_ADMISSION:
+            raise SpaceError(f"space {sid}: admission {admission!r} not in {sorted(VALID_ADMISSION)}")
         spaces[sid] = Space(id=sid, root=base / cfg.get("root", f"spaces/{sid}"),
-                            remote=cfg.get("remote", "local"), policy=cfg.get("policy") or {})
+                            remote=cfg.get("remote", "local"), policy=cfg.get("policy") or {},
+                            admission=admission)
     if not spaces:
         raise SpaceError("memory.yaml declares no spaces")
     return Root(path=base, spaces=spaces)
