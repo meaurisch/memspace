@@ -14,6 +14,11 @@ _SOURCE_RE = re.compile(r"^(https?://\S+|git:[0-9a-f]{7,40}|[\w./-]+\.\w+(:\d+)?
 _FM_RE = re.compile(r"^---\r?\n(.*?)\r?\n---\r?\n?(.*)$", re.S)
 _ORDER = ["id", "type", "scope", "title", "summary", "status", "confidence", "weight",
           "sources", "created", "updated", "supersedes", "superseded_by", "author", "tags"]
+# Optional: what an agent should do with the fact, and when. Written only when set.
+_LIST_FIELDS = ["triggers", "paths"]
+_TEXT_FIELDS = ["action_hint", "failure_if_ignored", "check", "enforce"]
+_ACTIONABLE = _LIST_FIELDS + _TEXT_FIELDS
+VALID_ENFORCE = {"stop"}
 
 
 class FactError(ValueError):
@@ -38,6 +43,12 @@ class Fact:
     author: str
     tags: list[str]
     body: str
+    triggers: list[str] = field(default_factory=list)
+    paths: list[str] = field(default_factory=list)
+    action_hint: str | None = None
+    failure_if_ignored: str | None = None
+    check: str | None = None
+    enforce: str | None = None
     path: Path = field(compare=False, default=Path())
 
     @property
@@ -99,6 +110,20 @@ def parse_fact(path: Path) -> Fact:
         raise FactError(f"{path}: superseded_by set but status is {status}")
     if not re.fullmatch(r"[a-z0-9-]+(/[a-z0-9-]+)?", str(meta["scope"])):
         raise FactError(f"{path}: scope must be <space> or <space>/<subject>")
+    extra = {}
+    for k in _LIST_FIELDS:
+        v = meta.get(k)
+        if v is None:
+            extra[k] = []
+        elif isinstance(v, list):
+            extra[k] = [str(x) for x in v]
+        else:
+            raise FactError(f"{path}: {k} must be a list")
+    for k in _TEXT_FIELDS:
+        v = meta.get(k)
+        extra[k] = None if v is None else str(v).strip()
+    if extra["enforce"] is not None and extra["enforce"] not in VALID_ENFORCE:
+        raise FactError(f"{path}: enforce {extra['enforce']!r} not in {sorted(VALID_ENFORCE)}")
     return Fact(
         id=fid, type=ftype, scope=str(meta["scope"]), title=str(meta["title"]).strip(),
         summary=str(meta["summary"]).strip(), status=status, confidence=meta["confidence"],
@@ -106,7 +131,7 @@ def parse_fact(path: Path) -> Fact:
         created=_date(meta["created"], "created"), updated=_date(meta["updated"], "updated"),
         supersedes=[str(x) for x in (meta.get("supersedes") or [])], superseded_by=sb,
         author=meta["author"], tags=[str(t) for t in (meta.get("tags") or [])],
-        body=m.group(2).strip(), path=path,
+        body=m.group(2).strip(), path=path, **extra,
     )
 
 
@@ -114,5 +139,9 @@ def dump_fact(fact: Fact) -> str:
     meta = {k: getattr(fact, k) for k in _ORDER}
     meta["created"] = fact.created.isoformat()
     meta["updated"] = fact.updated.isoformat()
+    for k in _ACTIONABLE:
+        v = getattr(fact, k)
+        if v:
+            meta[k] = v
     fm = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True, default_flow_style=None).strip()
     return f"---\n{fm}\n---\n{fact.body}\n"
