@@ -188,6 +188,10 @@ installed, or points at something it cannot execute exits 0 and lets the turn en
 `active` facts compile — superseded and disputed ones are ignored however loud their
 frontmatter is.
 
+Every hook also appends a line to `.memspace/fire.log` on each invocation (`FIRE`, and
+`BLOCK` when it actually stops the turn), so a harness can count firings and blocks
+without changing what the hook returns.
+
 Output is deterministic and idempotent: facts compile in id order, JSON keys are sorted,
 and recompiling an unchanged space rewrites byte-identical files, so the result is
 reviewable in a diff or regenerable in CI. `settings.json` is merged, not replaced — your
